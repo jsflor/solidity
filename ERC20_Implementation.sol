@@ -60,11 +60,7 @@ interface IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
@@ -105,7 +101,7 @@ contract MyCustomToken is IERC20 {
         return balances[account];
     }
 
-    function transfer(address recipient, uint256 amount) external override returns (bool) {
+    function transfer(address recipient, uint256 amount) external virtual override returns (bool) {
         require(balances[msg.sender] >= amount);
 
         balances[recipient] += amount;
@@ -131,11 +127,7 @@ contract MyCustomToken is IERC20 {
         return true;
     }
 
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external override returns (bool) {
+    function transferFrom(address sender, address recipient, uint256 amount) external virtual override returns (bool) {
         require(allowed[sender][recipient] >= amount);
         require(balances[sender] >= amount);
 
@@ -144,5 +136,100 @@ contract MyCustomToken is IERC20 {
         allowed[sender][recipient] -= amount;
 
         return true;
+    }
+}
+
+contract MyCustomTokenICO is MyCustomToken {
+    address public admin;
+    address payable public deposit;
+    uint public tokenPrice = 0.001 ether; // 1ETH = 1000MCT, 1MCT = 0.001ETH
+    uint public hardCap = 300 ether;
+    uint public raisedAmount;
+    uint public saleStart = block.timestamp; // Will start when deployed
+    uint public saleEnd = block.timestamp + 604800; // ICO ends in one week
+    uint public tokenTradeStart = saleEnd + 604800; // transferable in a week after sales end
+    uint public maxInvestment = 5 ether;
+    uint public minInvestment = 0.1 ether;
+
+    enum State {BeforeStart, Running, AfterEnd, Halted}
+    State public icoState;
+
+    constructor(addresss payable _deposit) {
+      deposit = _deposit;
+      admin = msg.sender;
+      icoState = State.BeforeStart;
+    }
+
+    modifier onlyAdmin() {
+      require(msg.sender == admin);
+      _;
+    }
+
+    function halt() public onlyAdmin {
+      icoState = State.Halted;
+    }
+
+    function resume() public onlyAdmin {
+      icoState = State.Running;
+    }
+
+    function changeDepositAddress(address payable newDeposit) public onlyAdmin {
+      deposit = newDeposit;
+    }
+
+    function getCurrentState() public view returns (State) {
+      if (icoState == State.Halted) {
+        return State.Halted;
+      } else if (block.timestamp < saleStart) {
+        return State.BeforeStart;
+      } else if (block.timestamp >= saleStart && block.timestamp <= saleEnd) {
+        return State.Running;
+      } else {
+        return State.AfterEnd;
+      }
+    }
+
+    event Invest(address investor, uint value, uint tokens);
+
+    function invest() public payable returns (bool) {
+      icoState = getCurrentState();
+      require(icoState == State.Running);
+      require(msg.value >= minInvestment && msg.value <= maxInvestment);
+
+      raisedAmount += msg.value;
+      require(raisedAmount <= hardCap);
+
+      uint tokens = msg.value / tokenPrice;
+
+      balances[msg.sender] += tokens;
+      balances[founder] -= tokens;
+      deposit.transfer(msg.value);
+
+      emit Invest(msg.sender, msg.value, tokens);
+
+      return true;
+    }
+
+    receive() payable external {
+      invest();
+    }
+
+    function transfer(address recipient, uint256 amount) external override returns (bool) {
+      require(block.timestamp > tokenTradeStart);
+      MyCustomToken.transfer(recipient, amount); // same as super.transfer(recipient, amount)
+      return true;
+    }
+
+    function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
+      require(block.timestamp > tokenTradeStart);
+      MyCustomToken.transferFrom(sender, recipient, amount); // same as super.transferFrom(sender, recipient, amount)
+      return true;
+    }
+
+    function burn() public returns (bool) {
+      icoState = getCurrentState();
+      require(icoState == State.AfterEnd);
+      balances[founder] = 0;
+      return true;
     }
 }
