@@ -101,7 +101,7 @@ contract MyCustomToken is IERC20 {
         return balances[account];
     }
 
-    function transfer(address recipient, uint256 amount) external virtual override returns (bool) {
+    function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
         require(balances[msg.sender] >= amount);
 
         balances[recipient] += amount;
@@ -127,7 +127,7 @@ contract MyCustomToken is IERC20 {
         return true;
     }
 
-    function transferFrom(address sender, address recipient, uint256 amount) external virtual override returns (bool) {
+    function transferFrom(address sender, address recipient, uint256 amount) public virtual override returns (bool) {
         require(allowed[sender][recipient] >= amount);
         require(balances[sender] >= amount);
 
@@ -154,7 +154,7 @@ contract MyCustomTokenICO is MyCustomToken {
     enum State {BeforeStart, Running, AfterEnd, Halted}
     State public icoState;
 
-    constructor(addresss payable _deposit) {
+    constructor(address payable _deposit) {
       deposit = _deposit;
       admin = msg.sender;
       icoState = State.BeforeStart;
@@ -214,13 +214,13 @@ contract MyCustomTokenICO is MyCustomToken {
       invest();
     }
 
-    function transfer(address recipient, uint256 amount) external override returns (bool) {
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
       require(block.timestamp > tokenTradeStart);
       MyCustomToken.transfer(recipient, amount); // same as super.transfer(recipient, amount)
       return true;
     }
 
-    function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
+    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
       require(block.timestamp > tokenTradeStart);
       MyCustomToken.transferFrom(sender, recipient, amount); // same as super.transferFrom(sender, recipient, amount)
       return true;
